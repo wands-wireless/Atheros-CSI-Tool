@@ -47,7 +47,7 @@ volatile u32        csi_len;
 volatile u32        csi_valid;
 volatile u32        recording;
 
-static struct       ath9k_csi csi_buf[16];
+static struct       ath9k_csi csi_buf[128];
 static char         tx_buf[Tx_Buf_LEN];
 //static char         rx_buf[Rx_Buf_LEN];
 
@@ -200,7 +200,7 @@ static ssize_t csi_read(struct file *file, char __user *user_buf,
         
         copy_to_user(user_buf,tx_buf,len);                  // COPY
         
-        csi_tail = (csi_tail+1) & 0x0000000F;               // delete the buffer 
+        csi_tail = (csi_tail+1) & 0x0000007F;               // delete the buffer 
         return len;
     }else{
         return 0;
@@ -219,8 +219,10 @@ void csi_record_payload(void* data, u_int16_t data_len)
     struct ath9k_csi* csi;
     if(recording )
     {
-        if( ((csi_head + 1) & 0x0000000F) == csi_tail)              // check and update 
-            csi_tail = (csi_tail + 1) & 0x0000000F;
+        if( ((csi_head + 1) & 0x0000007F) == csi_tail){              // check and update 
+	    wake_up_interruptible(&csi_queue);
+	}
+//            csi_tail = (csi_tail + 1) & 0x0000000F;
         
         csi = (struct ath9k_csi*)&csi_buf[csi_head];
         memcpy((void*)(csi->payload_buf),data, data_len);           // copy the payload
@@ -308,7 +310,7 @@ void csi_record_status(struct ath_hw *ah, struct ath_rx_status *rxs, struct ar90
         }
         
         csi_valid = 0;                                  // update 
-        csi_head  = (csi_head + 1) & 0x0000000F;
+        csi_head  = (csi_head + 1) & 0x0000007F;
 
         wake_up_interruptible(&csi_queue);              // wake up waiting queue 
     }
